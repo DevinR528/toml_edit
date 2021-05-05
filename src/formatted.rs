@@ -1,29 +1,42 @@
-use crate::decor::{Decor, Formatted, InternalString, Repr};
-use crate::key::Key;
-use crate::parser::strings;
-use crate::parser::TomlError;
-use crate::table::{Item, KeyValuePairs, TableKeyValue};
-use crate::value::{Array, DateTime, InlineTable, Value};
-use combine::stream::state::State;
 use std::iter::FromIterator;
 
-pub(crate) fn decorate_array(array: &mut Array) {
+use combine::stream::state::State;
+
+use crate::{
+    decor::{Decor, Formatted, InternalString, Repr},
+    key::Key,
+    parser::{strings, TomlError},
+    table::{Item, KeyValuePairs, TableKeyValue},
+    value::{Array, DateTime, InlineTable, Value},
+};
+
+pub(crate) fn decorate_array(array: &mut Array, is_compact: bool) {
+    let newlines = array
+        .values
+        .iter()
+        .filter_map(Item::as_value)
+        .any(|v| v.decor().prefix.contains('\n'));
     for (i, val) in array
         .values
         .iter_mut()
         .filter_map(Item::as_value_mut)
         .enumerate()
     {
-        // [value1, value2, value3]
-        if i > 0 {
-            decorate(val, " ", "");
+        println!("{:?}", val);
+        if newlines {
+            decorate(val, &val.decor().prefix.clone(), "");
         } else {
-            decorate(val, "", "");
+            // [value1, value2, value3]
+            if i > 0 && !is_compact {
+                decorate(val, " ", "");
+            } else {
+                decorate(val, "", "");
+            }
         }
     }
 }
 
-pub(crate) fn decorate_inline_table(table: &mut InlineTable) {
+pub(crate) fn decorate_inline_table(table: &mut InlineTable, is_compact: bool) {
     let n = table.len();
     for (i, (key, value)) in table
         .items
@@ -32,13 +45,19 @@ pub(crate) fn decorate_inline_table(table: &mut InlineTable) {
         .map(|(_, kv)| (&mut kv.key, kv.value.as_value_mut().unwrap()))
         .enumerate()
     {
-        // { key1 = value1, key2 = value2 }
-        key.decor.prefix = InternalString::from(" ");
-        key.decor.suffix = InternalString::from(" ");
-        if i == n - 1 {
-            decorate(value, " ", " ");
+        if is_compact {
+            key.decor.prefix = InternalString::from("");
+            key.decor.suffix = InternalString::from("");
+            decorate(value, "", "");
         } else {
-            decorate(value, " ", "");
+            // { key1 = value1, key2 = value2 }
+            key.decor.prefix = InternalString::from(" ");
+            key.decor.suffix = InternalString::from(" ");
+            if i == n - 1 {
+                decorate(value, " ", " ");
+            } else {
+                decorate(value, " ", "");
+            }
         }
     }
 }
@@ -227,7 +246,7 @@ impl<V: Into<Value>> FromIterator<V> for Value {
             values: v.collect(),
             ..Default::default()
         };
-        decorate_array(&mut array);
+        decorate_array(&mut array, false);
         Value::Array(array)
     }
 }
@@ -254,7 +273,7 @@ impl<'k, K: Into<&'k Key>, V: Into<Value>> FromIterator<(K, V)> for Value {
             items: to_key_value_pairs(iter),
             ..Default::default()
         };
-        decorate_inline_table(&mut table);
+        decorate_inline_table(&mut table, false);
         Value::InlineTable(table)
     }
 }

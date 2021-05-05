@@ -22,7 +22,7 @@ impl<T> Display for Formatted<T> {
 
 impl Display for DateTime {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        match *self {
+        match self {
             DateTime::OffsetDateTime(d) => write!(f, "{}", d),
             DateTime::LocalDateTime(d) => write!(f, "{}", d),
             DateTime::LocalDate(d) => write!(f, "{}", d),
@@ -33,14 +33,14 @@ impl Display for DateTime {
 
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        match *self {
-            Value::Integer(ref repr) => write!(f, "{}", repr),
-            Value::String(ref repr) => write!(f, "{}", repr),
-            Value::Float(ref repr) => write!(f, "{}", repr),
-            Value::Boolean(ref repr) => write!(f, "{}", repr),
-            Value::DateTime(ref repr) => write!(f, "{}", repr),
-            Value::Array(ref array) => write!(f, "{}", array),
-            Value::InlineTable(ref table) => write!(f, "{}", table),
+        match self {
+            Value::Integer(repr) => write!(f, "{}", repr),
+            Value::String(repr) => write!(f, "{}", repr),
+            Value::Float(repr) => write!(f, "{}", repr),
+            Value::Boolean(repr) => write!(f, "{}", repr),
+            Value::DateTime(repr) => write!(f, "{}", repr),
+            Value::Array(array) => write!(f, "{}", array),
+            Value::InlineTable(table) => write!(f, "{}", table),
         }
     }
 }

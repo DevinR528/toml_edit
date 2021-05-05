@@ -7,9 +7,6 @@ pub struct ArrayOfTables {
     pub(crate) values: Vec<Item>,
 }
 
-/// An iterator type over `ArrayOfTables`'s values.
-type ArrayOfTablesIter<'a> = Box<dyn Iterator<Item = &'a Table> + 'a>;
-
 impl ArrayOfTables {
     /// Creates an empty array of tables.
     pub fn new() -> Self {
@@ -17,8 +14,13 @@ impl ArrayOfTables {
     }
 
     /// Returns an iterator over tables.
-    pub fn iter(&self) -> ArrayOfTablesIter<'_> {
-        Box::new(self.values.iter().filter_map(Item::as_table))
+    pub fn iter(&self) -> impl Iterator<Item = &Table> {
+        self.values.iter().filter_map(Item::as_table)
+    }
+
+    /// Returns an iterator over tables.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Table> {
+        self.values.iter_mut().filter_map(Item::as_table_mut)
     }
 
     /// Returns an optional reference to the table.

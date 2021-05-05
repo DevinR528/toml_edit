@@ -1,4 +1,3 @@
-#![deny(missing_docs)]
 #![deny(warnings)]
 // https://github.com/Marwes/combine/issues/172
 #![recursion_limit = "256"]
@@ -25,7 +24,7 @@
 //! // let's add a new key/value pair inside a.b: c = {d = "hello"}
 //! doc["a"]["b"]["c"]["d"] = value("hello");
 //! // autoformat inline table a.b.c: { d = "hello" }
-//! doc["a"]["b"]["c"].as_inline_table_mut().map(|t| t.fmt());
+//! doc["a"]["b"]["c"].as_inline_table_mut().map(|t| t.fmt(false));
 //! let expected = r#"
 //! "hello" = 'toml!' # comment
 //! ['a'.b]
@@ -84,6 +83,6 @@ pub use crate::decor::Decor;
 pub use crate::document::Document;
 pub use crate::key::Key;
 pub use crate::parser::TomlError;
-pub use crate::table::{array, table, value, Item, Iter, IterMut, Table, TableLike};
-pub use crate::value::{Array, ArrayIter, InlineTable, Value};
+pub use crate::table::{array, table, value, Item, Table};
+pub use crate::value::{Array, InlineTable, Value};
 pub use formatted::decorated;

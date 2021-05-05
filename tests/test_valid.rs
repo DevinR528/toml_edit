@@ -2,7 +2,7 @@ use pretty_assertions::assert_eq;
 use serde_json::Map as JsonMap;
 use serde_json::Value as Json;
 
-use toml_edit::{Document, Item, Iter, Value};
+use toml_edit::{Document, Item, Value};
 
 fn pair_to_json((key, value): (&str, Item)) -> (String, Json) {
     fn typed_json(s: &str, json: Json) -> Json {
@@ -12,42 +12,40 @@ fn pair_to_json((key, value): (&str, Item)) -> (String, Json) {
         Json::Object(map)
     }
     fn value_to_json(value: &Value) -> Json {
-        match *value {
-            Value::String(ref s) => typed_json("string", Json::String(s.value().clone())),
-            Value::Integer(ref i) => typed_json("integer", Json::String(format!("{}", i.value()))),
-            Value::Float(ref f) => typed_json("float", Json::String(format!("{}", f.value()))),
-            Value::Boolean(ref b) => typed_json("bool", Json::String(b.raw().into())),
-            Value::DateTime(ref d) => typed_json("datetime", Json::String(d.raw().into())),
-            Value::Array(ref a) => {
+        match value {
+            Value::String(s) => typed_json("string", Json::String(s.value().clone())),
+            Value::Integer(i) => typed_json("integer", Json::String(format!("{}", i.value()))),
+            Value::Float(f) => typed_json("float", Json::String(format!("{}", f.value()))),
+            Value::Boolean(b) => typed_json("bool", Json::String(b.raw().into())),
+            Value::DateTime(d) => typed_json("datetime", Json::String(d.raw().into())),
+            Value::Array(a) => {
                 let json = Json::Array(a.iter().map(value_to_json).collect::<Vec<_>>());
                 typed_json("array", json)
             }
-            Value::InlineTable(ref t) => {
-                to_json(Box::new(t.iter().map(|(k, v)| (k, Item::Value(v.clone())))))
-            }
+            Value::InlineTable(t) => Json::Object(
+                t.iter()
+                    .map(|(k, v)| pair_to_json((k, Item::Value(v.clone()))))
+                    .collect(),
+            ),
         }
     }
     let json = match value {
-        Item::Value(ref v) => value_to_json(v),
-        Item::ArrayOfTables(ref arr) => Json::Array(
-            arr.iter()
-                .map(|t| to_json(iter_to_owned(t.iter())))
-                .collect::<Vec<_>>(),
-        ),
-        Item::Table(ref table) => to_json(iter_to_owned(table.iter())),
+        Item::Value(v) => value_to_json(&v),
+        Item::ArrayOfTables(arr) => {
+            Json::Array(arr.iter().map(|t| to_json(t.iter())).collect::<Vec<_>>())
+        }
+        Item::Table(table) => to_json(table.iter()),
         Item::None => Json::Null,
     };
     (key.to_owned(), json)
 }
 
-fn iter_to_owned(iter: Iter<'_>) -> OwnedIter<'_> {
-    Box::new(iter.map(|(k, v)| (k, v.clone())))
-}
-
-type OwnedIter<'s> = Box<dyn Iterator<Item = (&'s str, Item)> + 's>;
-
-fn to_json(iter: OwnedIter<'_>) -> Json {
-    Json::Object(iter.map(pair_to_json).collect())
+fn to_json<'a>(iter: impl Iterator<Item = (&'a str, &'a Item)>) -> Json {
+    Json::Object(
+        iter.map(|(k, v)| (k, v.clone()))
+            .map(pair_to_json)
+            .collect(),
+    )
 }
 
 fn run(json: &str, toml: &str) {
@@ -56,7 +54,7 @@ fn run(json: &str, toml: &str) {
     let doc = doc.unwrap();
 
     let json: Json = serde_json::from_str(json).unwrap();
-    let toml_json = to_json(iter_to_owned(doc.iter()));
+    let toml_json = to_json(doc.as_table().iter());
     // compare structure with jsons
     assert_eq!(json, toml_json);
 

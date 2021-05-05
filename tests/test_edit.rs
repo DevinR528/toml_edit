@@ -7,7 +7,7 @@ macro_rules! parse_key {
 }
 
 macro_rules! as_table {
-    ($e:ident) => {{
+    ($e:expr) => {{
         assert!($e.is_table());
         $e.as_table_mut().unwrap()
     }};
@@ -17,7 +17,7 @@ macro_rules! as_table {
 #[cfg(test)]
 #[rustfmt::skip]
 mod tests {
-    use toml_edit::{Document, Key, Value, Table, Item, value, table, array, decorated};
+    use toml_edit::{Document, Key, Value, Table, value, table, array, decorated};
     use std::iter::FromIterator;
     use std::fmt;
     use pretty_assertions::assert_eq;
@@ -460,10 +460,10 @@ fn test_set_position() {
     ).running(|root| {
         for (header, table) in root.iter_mut() {
             if header == "dependencies" {
-                let tab = as_table!(table);
+                let tab = as_table!(table.value_mut());
                 tab.set_position(0);
                 let (_, segmented) = tab.iter_mut().next().unwrap();
-                as_table!(segmented).set_position(5)
+                as_table!(segmented.value_mut()).set_position(5)
             }
         }
     }).produces_in_original_order(r#"        [dependencies]
@@ -484,7 +484,7 @@ fn test_multiple_zero_positions() {
         [dev-dependencies]"#
     ).running(|root| {
         for (_, table) in root.iter_mut() {
-            as_table!(table).set_position(0)
+            as_table!(table.value_mut()).set_position(0)
         }
     }).produces_in_original_order(r#"
         [package]
@@ -505,7 +505,7 @@ fn test_multiple_max_usize_positions() {
         [dev-dependencies]"#
     ).running(|root| {
         for (_, table) in root.iter_mut() {
-            as_table!(table).set_position(usize::MAX)
+            as_table!(table.value_mut()).set_position(usize::MAX)
         }
     }).produces_in_original_order(r#"        [dependencies.opencl]
         a=""
@@ -540,7 +540,7 @@ fn test_insert_replace_into_array() {
             assert!(a.get(2).is_some());
             assert!(a.push(4).is_ok());
             assert_eq!(a.len(), 4);
-            a.fmt();
+            a.fmt(false);
         }
         let b = root.entry("b");
         let b = as_array!(b);
@@ -620,14 +620,14 @@ fn test_insert_into_inline_table() {
             assert!(a.contains_key("a") && a.get("c").is_some());
             a.get_or_insert("b", 42);
             assert_eq!(a.len(), 3);
-            a.fmt();
+            a.fmt(false);
         }
         let b = root.entry("b");
         let b = as_inline_table!(b);
         assert!(b.is_empty());
         b.get_or_insert("'hello'", "world");
         assert_eq!(b.len(), 1);
-        b.fmt()
+        b.fmt(false)
     }).produces(r#"
         a = { a = 2, c = 3, b = 42 }
         b = { 'hello' = "world" }
@@ -658,37 +658,6 @@ fn test_remove_from_inline_table() {
         b = {}
 "#
     );
-}
-
-#[test]
-fn test_as_table_like() {
-    given(r#"
-        a = {a=2,  c = 3, b = 42}
-        x = {}
-        [[bin]]
-        [b]
-        x = "y"
-        [empty]"#
-    ).running(|root| {
-        let a = root["a"].as_table_like();
-        assert!(a.is_some());
-        let a = a.unwrap();
-        assert_eq!(a.iter().count(), 3);
-        assert_eq!(a.len(), 3);
-        assert_eq!(a.get("a").and_then(Item::as_integer), Some(2));
-
-        let b = root["b"].as_table_like();
-        assert!(b.is_some());
-        let b = b.unwrap();
-        assert_eq!(b.iter().count(), 1);
-        assert_eq!(b.len(), 1);
-        assert_eq!(b.get("x").and_then(Item::as_str), Some("y"));
-
-        assert_eq!(root["x"].as_table_like().map(|t| t.iter().count()), Some(0));
-        assert_eq!(root["empty"].as_table_like().map(|t| t.is_empty()), Some(true));
-
-        assert!(root["bin"].as_table_like().is_none());
-    });
 }
 
 #[test]

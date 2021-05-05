@@ -1,9 +1,12 @@
-use crate::array_of_tables::ArrayOfTables;
-use crate::decor::{Decor, InternalString, Repr};
-use crate::formatted::{decorated, key_repr};
-use crate::key::Key;
-use crate::value::{sort_key_value_pairs, Array, DateTime, InlineTable, Value};
 use linked_hash_map::LinkedHashMap;
+
+use crate::{
+    array_of_tables::ArrayOfTables,
+    decor::{Decor, InternalString, Repr},
+    formatted::{decorated, key_repr},
+    key::Key,
+    value::{sort_key_value_pairs, Array, DateTime, InlineTable, Value},
+};
 
 // TODO: add method to convert a table into inline table
 
@@ -50,15 +53,31 @@ pub struct TableKeyValue {
 }
 
 impl TableKeyValue {
+    ///
     pub(crate) fn new(key: Repr, value: Item) -> Self {
         TableKeyValue { key, value }
     }
-}
 
-/// An iterator type over `Table`'s key/value pairs.
-pub type Iter<'a> = Box<dyn Iterator<Item = (&'a str, &'a Item)> + 'a>;
-/// A mutable iterator type over `Table`'s key/value pairs.
-pub type IterMut<'a> = Box<dyn Iterator<Item = (&'a str, &'a mut Item)> + 'a>;
+    /// Returns the decor of a value.
+    pub fn decor(&self) -> &Decor {
+        &self.key.decor
+    }
+
+    /// Returns a mutable reference to the decor.
+    pub fn decor_mut(&mut self) -> &mut Decor {
+        &mut self.key.decor
+    }
+
+    /// Returns the `Item` that represents this value.
+    pub fn value(&self) -> &Item {
+        &self.value
+    }
+
+    /// Returns the `Item` that represents this value.
+    pub fn value_mut(&mut self) -> &mut Item {
+        &mut self.value
+    }
+}
 
 impl Table {
     /// Creates an empty table.
@@ -118,22 +137,23 @@ impl Table {
     }
 
     /// Returns an iterator over all key/value pairs, including empty.
-    pub fn iter(&self) -> Iter<'_> {
-        Box::new(self.items.iter().map(|(key, kv)| (&key[..], &kv.value)))
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Item)> {
+        self.items.iter().map(|(key, kv)| (&key[..], &kv.value))
     }
 
     /// Returns an mutable iterator over all key/value pairs, including empty.
-    pub fn iter_mut(&mut self) -> IterMut<'_> {
-        Box::new(
-            self.items
-                .iter_mut()
-                .map(|(key, kv)| (&key[..], &mut kv.value)),
-        )
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&String, &mut TableKeyValue)> {
+        self.items.iter_mut()
+    }
+
+    /// Removes an item given the key.
+    pub fn remove_full(&mut self, key: &str) -> Option<TableKeyValue> {
+        self.items.remove(key)
     }
 
     /// Removes an item given the key.
     pub fn remove(&mut self, key: &str) -> Option<Item> {
-        self.items.remove(key).map(|kv| kv.value)
+        self.items.remove(key).map(|v| v.value)
     }
 
     /// Sorts Key/Value Pairs of the table,
@@ -185,7 +205,8 @@ impl Table {
     /// [target."x86_64/windows.json".dependencies]
     /// ```
     ///
-    /// In the document above, tables `target` and `target."x86_64/windows.json"` are implicit.
+    /// In the document above, tables `target` and `target."x86_64/windows.json"` are
+    /// implicit.
     ///
     /// ```
     /// use toml_edit::Document;
@@ -217,6 +238,22 @@ impl Table {
     /// in which case its position is set automatically.
     pub fn position(&self) -> Option<usize> {
         self.position
+    }
+
+    /// Returns the decor around the heading.
+    pub fn header_decor(&self) -> &Decor {
+        &self.decor
+    }
+
+    /// Returns the decor around the heading.
+    pub fn header_decor_mut(&mut self) -> &mut Decor {
+        &mut self.decor
+    }
+
+    /// Return the raw string and TableKeyValue pairs that represent the items of
+    /// a table.
+    pub fn insert_key_value(&mut self, key: &str, tkv: TableKeyValue) {
+        self.items.insert(key.to_string(), tkv);
     }
 }
 
@@ -372,44 +409,6 @@ impl Item {
     /// Returns true iff `self` is an inline table.
     pub fn is_inline_table(&self) -> bool {
         self.as_inline_table().is_some()
-    }
-
-    /// Casts `self` to either a table or an inline table.
-    pub fn as_table_like(&self) -> Option<&dyn TableLike> {
-        self.as_table()
-            .map(|t| t as &dyn TableLike)
-            .or_else(|| self.as_inline_table().map(|t| t as &dyn TableLike))
-    }
-
-    /// Returns true iff `self` is either a table, or an inline table.
-    pub fn is_table_like(&self) -> bool {
-        self.as_table_like().is_some()
-    }
-}
-
-/// This trait represents either a `Table`, or an `InlineTable`.
-pub trait TableLike {
-    /// Returns an iterator over key/value pairs.
-    fn iter(&self) -> Iter<'_>;
-    /// Returns the number of nonempty items.
-    fn len(&self) -> usize {
-        self.iter().filter(|&(_, v)| !v.is_none()).count()
-    }
-    /// Returns true iff the table is empty.
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    /// Returns an optional reference to an item given the key.
-    fn get<'s>(&'s self, key: &str) -> Option<&'s Item>;
-}
-
-impl TableLike for Table {
-    /// Returns an iterator over all subitems, including `Item::None`.
-    fn iter(&self) -> Iter<'_> {
-        self.iter()
-    }
-    fn get<'s>(&'s self, key: &str) -> Option<&'s Item> {
-        self.get(key)
     }
 }
 

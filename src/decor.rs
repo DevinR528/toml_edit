@@ -3,13 +3,13 @@
 #[derive(Eq, PartialEq, Clone, Debug, Hash)]
 pub struct Formatted<T> {
     value: T,
-    pub(crate) repr: Repr,
+    pub repr: Repr,
 }
 
 // String representation of a key or a value
 // together with a decoration.
 #[derive(Eq, PartialEq, Clone, Debug, Hash)]
-pub(crate) struct Repr {
+pub struct Repr {
     pub decor: Decor,
     pub raw_value: InternalString,
 }
@@ -18,8 +18,10 @@ pub(crate) struct Repr {
 /// including comments, whitespaces and newlines.
 #[derive(Eq, PartialEq, Clone, Default, Debug, Hash)]
 pub struct Decor {
-    pub(crate) prefix: InternalString,
-    pub(crate) suffix: InternalString,
+    ///
+    pub prefix: InternalString,
+    ///
+    pub suffix: InternalString,
 }
 
 pub(crate) type InternalString = String;

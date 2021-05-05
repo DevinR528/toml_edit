@@ -1,13 +1,16 @@
-use crate::decor::{Decor, Formatted, InternalString};
-use crate::key::Key;
-use crate::parser;
-use crate::table::{Item, Iter, KeyValuePairs, TableKeyValue, TableLike};
-use crate::{decorated, formatted};
+use std::{mem, str::FromStr};
+
 use chrono::{self, FixedOffset};
 use combine::stream::state::State;
 use linked_hash_map::LinkedHashMap;
-use std::mem;
-use std::str::FromStr;
+
+use crate::{
+    decor::{Decor, Formatted, InternalString},
+    decorated, formatted,
+    key::Key,
+    parser,
+    table::{Item, KeyValuePairs, TableKeyValue},
+};
 
 /// Representation of a TOML Value (as part of a Key/Value Pair).
 #[derive(Debug, Clone)]
@@ -46,14 +49,14 @@ pub enum DateTime {
 /// payload of the `Value::Array` variant's value
 #[derive(Debug, Default, Clone)]
 pub struct Array {
-    // always Vec<Item::Value>
-    pub(crate) values: Vec<Item>,
-    // `trailing` represents whitespaces, newlines
-    // and comments in an empty array or after the trailing comma
-    pub(crate) trailing: InternalString,
-    pub(crate) trailing_comma: bool,
+    /// always Vec<Item::Value>
+    pub values: Vec<Item>,
+    /// `trailing` represents whitespaces, newlines
+    /// and comments in an empty array or after the trailing comma
+    pub trailing: InternalString,
+    pub trailing_comma: bool,
     // prefix before `[` and suffix after `]`
-    pub(crate) decor: Decor,
+    pub decor: Decor,
 }
 
 /// Type representing a TOML inline table,
@@ -79,9 +82,6 @@ pub(crate) enum ValueType {
     InlineTable,
 }
 
-/// An iterator type over `Array`'s values.
-pub type ArrayIter<'a> = Box<dyn Iterator<Item = &'a Value> + 'a>;
-
 impl Array {
     /// Returns the length of the underlying Vec.
     /// To get the actual number of items use `a.iter().count()`.
@@ -95,17 +95,25 @@ impl Array {
     }
 
     /// Returns an iterator over all values.
-    pub fn iter(&self) -> ArrayIter<'_> {
-        Box::new(self.values.iter().filter_map(Item::as_value))
+    pub fn iter(&self) -> impl Iterator<Item = &Value> {
+        self.values.iter().filter_map(Item::as_value)
     }
 
     /// Appends a new value to the end of the array, applying default formatting to it.
     ///
-    /// Returns an error if the value was of a different type than the values in the array.
+    /// Returns an error if the value was of a different type than the values in the
+    /// array.
     pub fn push<V: Into<Value>>(&mut self, v: V) -> Result<(), Value> {
         self.value_op(v.into(), true, |items, value| {
             items.push(Item::Value(value))
         })
+    }
+
+    /// Sorts a `Value::String` array.
+    ///
+    /// It uses the `Value::as_str` method to compare and sort.
+    pub fn sort(&mut self) {
+        self.values.sort_by(|a, b| a.as_str().cmp(&b.as_str()))
     }
 
     /// Appends a new, already formatted value to the end of the array.
@@ -115,10 +123,11 @@ impl Array {
         self.value_op(v, false, |items, value| items.push(Item::Value(value)))
     }
 
-    /// Inserts an element at the given position within the array, applying default formatting to
-    /// it and shifting all values after it to the right.
+    /// Inserts an element at the given position within the array, applying default
+    /// formatting to it and shifting all values after it to the right.
     ///
-    /// Returns an error if the value was of a different type than the values in the array.
+    /// Returns an error if the value was of a different type than the values in the
+    /// array.
     ///
     /// Panics if `index > len`.
     pub fn insert<V: Into<Value>>(&mut self, index: usize, v: V) -> Result<(), Value> {
@@ -127,10 +136,11 @@ impl Array {
         })
     }
 
-    /// Inserts an already formatted value at the given position within the array, shifting all
-    /// values after it to the right.
+    /// Inserts an already formatted value at the given position within the array,
+    /// shifting all values after it to the right.
     ///
-    /// Returns an error if the value was of a different type than the values in the array.
+    /// Returns an error if the value was of a different type than the values in the
+    /// array.
     ///
     /// Panics if `index > len`.
     pub fn insert_formatted(&mut self, index: usize, v: Value) -> Result<(), Value> {
@@ -139,9 +149,11 @@ impl Array {
         })
     }
 
-    /// Replaces the element at the given position within the array, preserving existing formatting.
+    /// Replaces the element at the given position within the array, preserving existing
+    /// formatting.
     ///
-    /// Returns an error if the replacement was of a different type than the values in the array.
+    /// Returns an error if the replacement was of a different type than the values in the
+    /// array.
     ///
     /// Panics if `index >= len`.
     pub fn replace<V: Into<Value>>(&mut self, index: usize, v: V) -> Result<Value, Value> {
@@ -154,9 +166,11 @@ impl Array {
         self.replace_formatted(index, value)
     }
 
-    /// Replaces the element at the given position within the array with an already formatted value.
+    /// Replaces the element at the given position within the array with an already
+    /// formatted value.
     ///
-    /// Returns an error if the replacement was of a different type than the values in the array.
+    /// Returns an error if the replacement was of a different type than the values in the
+    /// array.
     ///
     /// Panics if `index >= len`.
     pub fn replace_formatted(&mut self, index: usize, v: Value) -> Result<Value, Value> {
@@ -168,8 +182,8 @@ impl Array {
         })
     }
 
-    /// Returns a reference to the value at the given index, or `None` if the index is out of
-    /// bounds.
+    /// Returns a reference to the value at the given index, or `None` if the index is out
+    /// of bounds.
     pub fn get(&self, index: usize) -> Option<&Value> {
         self.values.get(index).and_then(Item::as_value)
     }
@@ -187,8 +201,8 @@ impl Array {
     }
 
     /// Auto formats the array.
-    pub fn fmt(&mut self) {
-        formatted::decorate_array(self);
+    pub fn fmt(&mut self, is_compact: bool) {
+        formatted::decorate_array(self, is_compact);
     }
 
     fn value_op<T>(
@@ -279,8 +293,8 @@ impl InlineTable {
     }
 
     /// Auto formats the table.
-    pub fn fmt(&mut self) {
-        formatted::decorate_inline_table(self);
+    pub fn fmt(&mut self, is_compact: bool) {
+        formatted::decorate_inline_table(self, is_compact);
     }
 
     /// Removes a key/value pair given the key.
@@ -300,15 +314,6 @@ impl InlineTable {
         self.items
             .get_mut(key)
             .and_then(|kv| kv.value.as_value_mut())
-    }
-}
-
-impl TableLike for InlineTable {
-    fn iter(&self) -> Iter<'_> {
-        Box::new(self.items.iter().map(|(key, kv)| (&key[..], &kv.value)))
-    }
-    fn get<'s>(&'s self, key: &str) -> Option<&'s Item> {
-        self.items.get(key).map(|kv| &kv.value)
     }
 }
 
@@ -488,22 +493,34 @@ impl Value {
     /// ```rust
     /// let v = toml_edit::Value::from(true);
     /// assert_eq!(v.decor().suffix(), "");
-    ///```
+    /// ```
     pub fn decor(&self) -> &Decor {
-        match *self {
-            Value::Integer(ref f) => &f.repr.decor,
-            Value::String(ref f) => &f.repr.decor,
-            Value::Float(ref f) => &f.repr.decor,
-            Value::DateTime(ref f) => &f.repr.decor,
-            Value::Boolean(ref f) => &f.repr.decor,
-            Value::Array(ref a) => &a.decor,
-            Value::InlineTable(ref t) => &t.decor,
+        match self {
+            Value::Integer(f) => &f.repr.decor,
+            Value::String(f) => &f.repr.decor,
+            Value::Float(f) => &f.repr.decor,
+            Value::DateTime(f) => &f.repr.decor,
+            Value::Boolean(f) => &f.repr.decor,
+            Value::Array(a) => &a.decor,
+            Value::InlineTable(t) => &t.decor,
+        }
+    }
+
+    pub fn decor_mut(&mut self) -> &mut Decor {
+        match self {
+            Value::Integer(f) => &mut f.repr.decor,
+            Value::String(f) => &mut f.repr.decor,
+            Value::Float(f) => &mut f.repr.decor,
+            Value::DateTime(f) => &mut f.repr.decor,
+            Value::Boolean(f) => &mut f.repr.decor,
+            Value::Array(a) => &mut a.decor,
+            Value::InlineTable(t) => &mut t.decor,
         }
     }
 }
 
 pub(crate) fn sort_key_value_pairs(items: &mut LinkedHashMap<InternalString, TableKeyValue>) {
-    let mut keys: Vec<InternalString> = items
+    let mut keys: Vec<_> = items
         .iter()
         .filter_map(|i| (i.1).value.as_value().map(|_| i.0))
         .cloned()
